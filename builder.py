@@ -17,12 +17,17 @@ def build_words_table():
         for row in meta_reader:
             is_regular = row['分类'] == 'CJK'
             if is_regular:
+                full_code = ''.join(c for c in row['编码'] if c.isalpha()).lower()
                 big_code = ''.join(c for c in row['编码'] if c.isupper()).lower()
-                writer.writerow((row['文字'], big_code, row['权重'], row['拆分']))
-
                 special_code = meta_special.get(row['文字'])
-                if special_code is not None and (not big_code.startswith(special_code)):
+
+                if special_code is not None and (not big_code.startswith(special_code)) and (not full_code.startswith(special_code)):
                     writer.writerow((row['文字'], special_code, row['权重'], row['拆分']))
+
+                if not full_code.startswith(big_code):
+                    writer.writerow((row['文字'], big_code, row['权重'], row['拆分']))
+
+                writer.writerow((row['文字'], full_code, row['权重'], row['拆分']))
 
 
 def build_phrases_table():
