@@ -25,10 +25,10 @@ def build_words_table():
                     writer.writerow((row['文字'], special_code, row['权重'], row['拆分']))
 
                 if not full_code.startswith(big_code):
-                    writer.writerow((row['文字'], big_code, row['权重'], row['拆分']))
+                    if special_code is None or not special_code.startswith(big_code):
+                        writer.writerow((row['文字'], big_code, row['权重'], row['拆分']))
 
                 writer.writerow((row['文字'], full_code, row['权重'], row['拆分']))
-
 
 def build_phrases_table():
     shutil.copy('./meta.special.phrases.tsv', './out/phrases.dict.tsv')
