@@ -1,37 +1,61 @@
 import csv
 import pathlib
 import shutil
+import re
 
 
 def build_words_table():
-    headers = ('text', 'code', 'weight', 'comment')
-    with open('./meta.tsv') as meta_file, open('./meta.special.tsv') as meta_sp_file, open('./out/words.dict.tsv', 'w') as output_file:
-        meta_special = dict()
-        meta_special_reader = csv.DictReader(meta_sp_file, delimiter='\t')
-        for row in meta_special_reader:
-            meta_special[row['text']] = row['code']
+    with open('./data/拆分.tsv') as meta_file, open('./data/单字.tsv') as weight_file:
+        weight = {}
+        weight_reader = csv.DictReader(weight_file, delimiter='\t')
+        for row in weight_reader:
+            weight[row['文字']] = row['权重']
 
-        meta_reader = csv.DictReader(meta_file, delimiter='\t')
-        writer = csv.writer(output_file, delimiter='\t', lineterminator='\n')
-        writer.writerow(headers)
-        for row in meta_reader:
-            is_regular = row['分类'] == 'CJK'
-            if is_regular:
-                full_code = ''.join(c for c in row['编码'] if c.isalpha()).lower()
-                big_code = ''.join(c for c in row['编码'] if c.isupper()).lower()
-                special_code = meta_special.get(row['文字'])
+        table = dict()
+        table_reader = csv.DictReader(decomment(meta_file), delimiter='\t')
+        for row in table_reader:
+            meta = row['meta']
+            scope = re.search(r'『(.*)』', meta).group(1)
 
-                if special_code is not None and (not big_code.startswith(special_code)) and (not full_code.startswith(special_code)):
-                    writer.writerow((row['文字'], special_code, row['权重'], row['拆分']))
+            if scope == 'CJK':
+                comment = re.search(r'〔(.*)〕', meta).group(1)
+                code = re.search(r'【(.*)】', meta).group(1)
+                text = row['text']
+                if text in table:
+                    table[text]['codes'].add(code)
+                else:
+                    data = {
+                        'codes': { code, },
+                        'comment': comment,
+                        'weight': weight[text]
+                    }
+                    table[text] = data
 
-                if not full_code.startswith(big_code):
-                    if special_code is None or not special_code.startswith(big_code):
-                        writer.writerow((row['文字'], big_code, row['权重'], row['拆分']))
-
-                writer.writerow((row['文字'], full_code, row['权重'], row['拆分']))
+        with open('./out/words.dict.tsv', 'w') as output_file:
+            headers = ('text', 'code', 'weight', 'comment')
+            writer = csv.writer(output_file, delimiter='\t', lineterminator='\n')
+            writer.writerow(headers)
+            for key, value in table.items():
+                codes = value['codes']
+                for code in codes:
+                    if any(code in x for x in codes if code != x):
+                        pass
+                    else:
+                        writer.writerow((key, code, value['weight'], value['comment']))
 
 def build_phrases_table():
-    shutil.copy('./meta.special.phrases.tsv', './out/phrases.dict.tsv')
+    shutil.copy('./data/特码词.tsv', './out/phrases.dict.tsv')
+
+def is_comment(line):
+    return line.startswith('#')
+
+def is_whitespace(line):
+    return line.isspace()
+
+def decomment(csvfile):
+    for row in csvfile:
+        if is_comment(row) == False and is_whitespace(row) == False:
+            yield row
 
 if __name__ == '__main__':
     pathlib.Path("./out").mkdir(exist_ok=True)
