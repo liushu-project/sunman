@@ -5,6 +5,7 @@ import re
 
 
 def build_words_table():
+    special_words = get_special_words_table()
     with open('./data/拆分.tsv') as meta_file, open('./data/单字.tsv') as weight_file:
         weight = {}
         weight_reader = csv.DictReader(weight_file, delimiter='\t')
@@ -37,11 +38,25 @@ def build_words_table():
             writer.writerow(headers)
             for key, value in table.items():
                 codes = value['codes']
+                special_code = special_words.get(key)
                 for code in codes:
                     if any(code in x for x in codes if code != x):
+                        # 忽略完全为其他码的前缀的码
                         pass
                     else:
-                        writer.writerow((key, code, value['weight'], value['comment']))
+                        weight = value.get('weight', 0)
+                        # 存在特码且不被当前码包含
+                        if special_code is not None and len(special_code) <= len(code) and not code.startswith(special_code):
+                            weight = 0
+                        writer.writerow((key, code, weight, value['comment']))
+
+def get_special_words_table():
+    result = {}
+    with open('./data/特码字.tsv') as file:
+        reader = csv.DictReader(file, delimiter='\t')
+        for row in reader:
+            result[row['text']] = row['code']
+    return result
 
 def build_phrases_table():
     shutil.copy('./data/特码词.tsv', './out/phrases.dict.tsv')
