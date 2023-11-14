@@ -44,9 +44,13 @@ def build_words_table():
                         # 忽略完全为其他码的前缀的码
                         pass
                     else:
+                        if key == '你':
+                            print(f"{value} code: {codes}")
                         weight = value.get('weight', 0)
                         # 存在特码且不被当前码包含
                         if special_code is not None and len(special_code) <= len(code) and not code.startswith(special_code):
+                            writer.writerow((key, special_code, weight, value['comment']))
+                            # 当前码权重归0
                             weight = 0
                         writer.writerow((key, code, weight, value['comment']))
 
