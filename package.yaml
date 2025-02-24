@@ -1,0 +1,9 @@
+dependencies:
+  - base == 4.*
+  - http-conduit
+  - directory
+  - filepath
+  - bytestring
+executables:
+  sunman-generator:
+    main: src/Main.hs
