@@ -1,0 +1,26 @@
+cabal-version:   3.0
+name:            sunman
+version:         0.1.0.0
+license:         AGPL-3.0-only
+author:          Elliot
+build-type:      Simple
+
+common library-common
+    ghc-options: -Wall
+    build-depends:
+        base >=4.14 && <5,
+        text,
+        aeson,
+        unordered-containers,
+        vector
+
+executable sunman
+    import:           library-common
+    main-is:          Main.hs
+    build-depends:
+        http-conduit,
+        directory,
+        filepath,
+        bytestring
+    hs-source-dirs:   app
+    default-language: Haskell2010

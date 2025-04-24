@@ -1,1 +1,9 @@
 /out
+.direnv/
+temp/
+result
+/data
+
+/dist-newstyle
+
+.DS_Store
