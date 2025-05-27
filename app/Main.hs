@@ -9,7 +9,7 @@ import Data.Char (isLower, isUpper)
 import Data.Either (partitionEithers)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
-import Data.Maybe (catMaybes, mapMaybe, fromMaybe, listToMaybe)
+import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -23,8 +23,8 @@ main = do
   makeSureTempDir tempDir
 
   let rawFilePath = tempDir </> "0--shanren00.dict.yaml"
-  -- let rawFileUrl = "https://raw.githubusercontent.com/arpcn/rime-shanren3/refs/heads/master/0--shanren00.dict.yaml"
-  -- downloadFile rawFileUrl rawFilePath
+  let rawFileUrl = "https://raw.githubusercontent.com/arpcn/rime-shanren3/refs/heads/master/0--shanren00.dict.yaml"
+  downloadFile rawFileUrl rawFilePath
 
   rawContent <- extractContentFromRawFile rawFilePath
   rawDefinition <- parseRawTable rawContent
@@ -71,7 +71,7 @@ findMarker marker allLines = case dropWhile (not . T.isPrefixOf marker) allLines
 keepLine :: Text -> Bool
 keepLine line = not (T.null line) && not ("#" `T.isPrefixOf` line)
 
-parseRawTable :: [Text] -> IO [(Text, [Text], Text)]
+parseRawTable :: [Text] -> IO [(Text, ([Text], [Text]), Text)]
 parseRawTable table = do
   let processed = map (processLine . T.stripEnd) table
       (warnings, validEntries) = partitionEithers processed
@@ -82,7 +82,7 @@ parseRawTable table = do
   where
     formatWarning (char, reason) = T.concat ["字: ", char, " 原因: ", reason]
 
-processLine :: Text -> Either (Text, Text) (Text, [Text], Text)
+processLine :: Text -> Either (Text, Text) (Text, ([Text], [Text]), Text)
 processLine line = case parseLine line of
   Just (char, holocode) -> case generateStemAndCodeParts holocode of
     Right (stem, code) ->
@@ -91,7 +91,7 @@ processLine line = case parseLine line of
       Left (char, reason)
   Nothing -> Left (line, "Unknown")
 
-generateStemAndCodeParts :: Text -> Either Text (Text, [Text])
+generateStemAndCodeParts :: Text -> Either Text (Text, ([Text], [Text]))
 generateStemAndCodeParts holocode =
   let chars = T.unpack holocode
       uppers = take 2 [c | c <- chars, isUpper c]
@@ -109,7 +109,7 @@ generateStemAndCodeParts holocode =
         ws -> Just $ T.intercalate "；" ws
 
       stem = T.toLower $ T.pack $ take 2 finalChars
-      codeParts = map T.singleton chars
+      codeParts = splitByUppers holocode
    in if T.length stem == 2
         then Right (stem, codeParts)
         else Left $ fromMaybe "未知错误" errorMsg
@@ -128,7 +128,32 @@ parseLine line =
                 else Just (char, codePart)
     _ -> Nothing
 
+splitByUppers :: Text -> ([Text], [Text])
+splitByUppers = go [] [] T.empty
+  where
+    go uppers lowers current txt
+      | T.null txt =
+          let finalLowers =
+                if T.null current
+                  then lowers
+                  else current : lowers
+           in (reverse uppers, reverse finalLowers)
+      | isUpper (T.head txt) =
+          let newChar = T.take 1 txt
+              newUppers = newChar : uppers
+              newLowers =
+                if T.null current
+                  then lowers
+                  else current : lowers
+           in go newUppers newLowers T.empty (T.tail txt)
+      | isLower (T.head txt) =
+          let newChar = T.take 1 txt
+           in go uppers lowers (T.append current newChar) (T.tail txt)
+      | otherwise =
+          go uppers lowers current (T.tail txt)
+
 type FrequencyPair = (Text, Text)
+
 type FrequencyTable = [FrequencyPair]
 
 readFreqTable :: FilePath -> IO FrequencyTable
@@ -143,7 +168,7 @@ readFreqTable path = do
 
 type CodeMap = HM.HashMap Text FrequencyPair
 
-generateCodeMap :: FrequencyTable -> [(Text, [Text], Text)] -> IO CodeMap
+generateCodeMap :: FrequencyTable -> [(Text, ([Text], [Text]), Text)] -> IO CodeMap
 generateCodeMap freqTable rawDef = do
   let charToCodesMap = HM.fromList [(char, (codes, stem)) | (char, codes, stem) <- rawDef]
       processChars [] codeMap codeSet = (codeMap, codeSet)
@@ -168,18 +193,18 @@ generateCodeMap freqTable rawDef = do
     isCodeUsed :: Text -> HS.HashSet Text -> Bool
     isCodeUsed = HS.member
 
-    deriveCandidateCode :: [Text] -> Text
-    deriveCandidateCode codeParts =
-      let uppers = filter (isUpper . T.head) codeParts
-          lowers = filter (isLower . T.head) codeParts
-          numUppers = length uppers
-          maybeFirstUpper = listToMaybe uppers
-          maybeFirstLower = listToMaybe lowers
-          maybeLastLower = listToMaybe (reverse lowers)
-       in case numUppers of
-            1 -> fromMaybe "" maybeFirstUpper <> fromMaybe "" maybeFirstLower
-            n | n > 1 -> T.concat uppers <> fromMaybe "" maybeLastLower <> fromMaybe "" maybeFirstLower
-            _ -> T.empty
+    deriveCandidateCode :: ([Text], [Text]) -> Text
+    deriveCandidateCode (uppers, lowers) =
+      let upperPart = T.concat uppers
+          lowerFirstChar = case lowers of
+            [] -> T.empty
+            (x : _) -> T.take 1 x
+          lowerLastChar = case reverse lowers of
+            [] -> T.empty
+            (x : _) -> T.take 1 x
+          lowerPart = T.append lowerLastChar lowerFirstChar
+          result = T.append upperPart lowerPart
+       in result
 
     findShortestUniquePrefix :: Text -> HS.HashSet Text -> Text
     findShortestUniquePrefix candidate currentSet = go 1
@@ -192,7 +217,7 @@ generateCodeMap freqTable rawDef = do
                     then go (n + 1)
                     else prefix
 
-generatePhrasesCodeMap :: FrequencyTable -> [(Text, [Text], Text)] -> IO CodeMap
+generatePhrasesCodeMap :: FrequencyTable -> [(Text, ([Text], [Text]), Text)] -> IO CodeMap
 generatePhrasesCodeMap freqTable rawDef = do
   let charToCodesMap = HM.fromList [(char, stem) | (char, _, stem) <- rawDef]
   return $ process freqTable charToCodesMap HM.empty
