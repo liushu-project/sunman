@@ -1,5 +1,6 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main (main) where
 
@@ -13,6 +14,9 @@ import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
+import Data.Text.Read (decimal)
+import Data.List (sortOn)
+import Data.Ord (Down(..))
 import Network.HTTP.Simple (Request, getResponseBody, httpLBS)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
 import System.FilePath ((</>))
@@ -29,12 +33,12 @@ main = do
   rawContent <- extractContentFromRawFile rawFilePath
   rawDefinition <- parseRawTable rawContent
 
-  freqTable <- readFreqTable "./single_char_sorted.tsv"
+  freqTable <- readFreqTable "./single_char.tsv"
 
   codeMap <- generateCodeMap freqTable rawDefinition
   writeCodeMapToTSV codeMap "./dict.tsv"
 
-  phrasesFreqTable <- readFreqTable "./multi_char_sorted.tsv"
+  phrasesFreqTable <- readFreqTable "./multi_char.tsv"
 
   phrasesCodeMap <- generatePhrasesCodeMap phrasesFreqTable rawDefinition
   writeCodeMapToTSV phrasesCodeMap "./words.dict.tsv"
@@ -160,11 +164,20 @@ readFreqTable :: FilePath -> IO FrequencyTable
 readFreqTable path = do
   content <- TIO.readFile path
   let lns = T.lines content
-  return $ mapMaybe parse lns
+  let parsed = mapMaybe parse lns
+  return $ sortByNumericFrequency parsed
   where
     parse line = case T.splitOn "\t" line of
       [char, freq] -> Just (char, freq)
       _ -> Nothing
+    sortByNumericFrequency :: FrequencyTable -> FrequencyTable
+    sortByNumericFrequency table = 
+      map snd $ sortOn (Down . fst) $ map toNumeric table
+      where
+        toNumeric (char, freq) = 
+          case decimal freq of
+            Right (n :: Int, "") -> (n, (char, freq))
+            _ -> (0, (char, freq))
 
 type CodeMap = HM.HashMap Text FrequencyPair
 
