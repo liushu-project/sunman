@@ -1,0 +1,9 @@
+* 山人輸入方案
+
+#+HTML: <img src="https://img.shields.io/badge/License-AGPL%20v3-blue.svg" alt="AGPL-3.0" />
+#+HTML: <img src="https://img.shields.io/badge/Haskell-5e5086?logo=haskell&logoColor=white" alt="Haskell">
+
+** 編碼規則
+
+1. 所有單字，根據[[https://github.com/arpcn/rime-shanren3][持双山前輩的拆字表]]，按「字頻越高，編碼儘量越短」的原則編碼
+2. 詞彙表取每個單字的前兩碼結合而成
